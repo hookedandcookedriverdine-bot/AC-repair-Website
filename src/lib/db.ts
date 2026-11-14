@@ -1,19 +1,25 @@
 import { neon } from "@neondatabase/serverless";
 import type { Booking, Customer, Technician, BookingStatus } from "./store";
 
-// Pooler connection string for Neon Serverless PostgreSQL
-export const DEFAULT_NEON_URL =
-  "postgresql://neondb_owner:npg_jxL51pNhIfZr@ep-fragrant-hill-a138a91s-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
-
+// Neon Serverless PostgreSQL Database Connection
+// Environment variables are securely loaded via process.env.DATABASE_URL (Vercel / Node) 
+// or import.meta.env.VITE_DATABASE_URL (Vite Client)
 export const DATABASE_URL =
   (typeof process !== "undefined" && process.env?.DATABASE_URL) ||
   (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_DATABASE_URL) ||
-  DEFAULT_NEON_URL;
+  "";
+
+// Fallback dummy SQL client if DATABASE_URL is not configured (e.g. isolated build steps)
+const createDummySqlClient = () => {
+  const dummyFn = (async () => []) as any;
+  dummyFn.query = async () => [];
+  return dummyFn;
+};
 
 /**
  * Neon Serverless SQL Client instance
  */
-export const sql = neon(DATABASE_URL);
+export const sql = DATABASE_URL ? neon(DATABASE_URL) : createDummySqlClient();
 
 /**
  * Health check helper to test database connectivity
@@ -24,6 +30,9 @@ export async function checkDatabaseHealth(): Promise<{
   version?: string;
   error?: string;
 }> {
+  if (!DATABASE_URL) {
+    return { ok: false, error: "DATABASE_URL is not configured in environment variables." };
+  }
   try {
     const rows = await sql`SELECT NOW() as now, version() as version;`;
     if (rows && rows.length > 0) {
@@ -47,6 +56,7 @@ export async function checkDatabaseHealth(): Promise<{
  * Executes a fast `SELECT 1;` query to keep the compute endpoint warm and active.
  */
 export async function pingDatabaseKeepAlive(): Promise<boolean> {
+  if (!DATABASE_URL) return false;
   try {
     const res = await sql`SELECT 1 as keepalive;`;
     return Boolean(res && res.length > 0);

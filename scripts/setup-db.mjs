@@ -6,9 +6,26 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const connectionString =
-  process.env.DATABASE_URL ||
-  "postgresql://neondb_owner:npg_jxL51pNhIfZr@ep-fragrant-hill-a138a91s-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require";
+// Read from process.env or fallback to local .env file
+let connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  const envPath = path.join(__dirname, "..", ".env");
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, "utf-8");
+    for (const line of envContent.split("\n")) {
+      const match = line.match(/^\s*DATABASE_URL\s*=\s*(.*)$/);
+      if (match) {
+        connectionString = match[1].trim().replace(/^["']|["']$/g, "");
+        break;
+      }
+    }
+  }
+}
+
+if (!connectionString) {
+  console.error("Error: DATABASE_URL environment variable is not configured. Please set DATABASE_URL or define it in your .env file.");
+  process.exit(1);
+}
 
 const sql = neon(connectionString);
 
